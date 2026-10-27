@@ -38,6 +38,9 @@
 <style>
 :root{--forest:#14402c;--forest-2:#1f5e41;--leaf:#2f9e63;--leaf-soft:#e3f3ea;--lime:#a8d672;--sun:#e0a82e;--paper:#fbfdfb;--ink:#17261f;--muted:#53665c;--line:#d5e6dc}
 *{box-sizing:border-box;margin:0;padding:0}
+img,svg{max-width:100%}
+body{overflow-wrap:break-word}
+.txt,.side{min-width:0}
 html{scroll-behavior:smooth}
 body{font-family:Georgia,"Times New Roman",serif;background:var(--paper);color:var(--ink);line-height:1.75;font-size:18px}
 a{color:var(--forest-2)}
@@ -50,6 +53,7 @@ header.site .wrap{display:flex;align-items:center;justify-content:space-between;
 nav ul{list-style:none;display:flex;gap:18px;flex-wrap:wrap;font-family:system-ui,Arial,sans-serif;font-size:.92rem}
 nav a{color:#cfe8d9;text-decoration:none}
 nav a:hover{color:#fff;text-decoration:underline}
+html,body{overflow-x:hidden}
 .hero{position:relative;overflow:hidden;background:var(--forest);color:#fff;padding:130px 0 110px;min-height:65vh;display:flex;align-items:center}
 .hero>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.5}
 .hero:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(20,64,44,.93) 0%,rgba(20,64,44,.6) 60%,rgba(20,64,44,.2) 100%)}
@@ -77,8 +81,8 @@ figcaption{font-family:system-ui,Arial,sans-serif;font-size:.84rem;color:var(--m
 .box h3{margin-top:0}.box p{font-size:.98rem;margin-bottom:8px}
 .box figure{margin:-20px -22px 14px}.box figure img{border-radius:0;aspect-ratio:4/3}.box figcaption{padding:6px 22px 0}
 .strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:22px}
-.table-scroll{overflow-x:auto;margin-top:18px}
-table{border-collapse:collapse;width:100%;min-width:640px;font-family:system-ui,Arial,sans-serif;font-size:.94rem}
+.table-scroll{overflow-x:auto;max-width:100%;margin-top:18px;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;min-width:560px;font-family:system-ui,Arial,sans-serif;font-size:.94rem}
 caption{text-align:left;font-weight:700;padding:0 0 10px;color:var(--forest)}
 th,td{border:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}
 thead th{background:var(--forest);color:#fff}
@@ -89,8 +93,21 @@ summary{cursor:pointer;padding:14px 18px;font-weight:700;color:var(--forest)}
 details p{padding:0 18px;margin-bottom:14px}
 footer{background:var(--forest);color:#bcd8c8;padding:40px 0;font-family:system-ui,Arial,sans-serif;font-size:.92rem}
 footer .brand{font-size:1.25rem;margin-bottom:10px}
-@media (max-width:900px){.split{grid-template-columns:1fr;gap:28px}.side{position:static}.hero{padding:90px 0 70px}}
-@media (max-width:640px){body{font-size:17px}section{padding:42px 0}nav ul{gap:12px}}
+@media (max-width:900px){.split{grid-template-columns:minmax(0,1fr);gap:28px}.side{position:static}.hero{padding:90px 0 70px;min-height:auto}}
+@media (max-width:640px){
+body{font-size:16.5px;line-height:1.7}
+section{padding:40px 0}
+header.site{position:static}
+header.site .wrap{flex-direction:column;align-items:flex-start;gap:8px}
+nav{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+nav ul{flex-wrap:nowrap;white-space:nowrap;gap:16px;padding-bottom:6px}
+.hero{padding:64px 0 52px}
+.hero h1{font-size:2rem}
+.grid,.strip,.gallery{grid-template-columns:minmax(0,1fr)}
+.toc{padding:14px 16px}
+table{font-size:.88rem;min-width:520px}
+th,td{padding:8px 9px}
+}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style>
 </head>
@@ -325,15 +342,34 @@ footer .brand{font-size:1.25rem;margin-bottom:10px}
 <script>
 (function(){
 function hide(img){var f=img.closest('figure');if(f&&!img.closest('.hero'))f.style.display='none';else img.style.display='none'}
-function fix(img){
-  if(img.dataset.tried)return;img.dataset.tried=1;
+function wikiThumb(img){
   fetch('https://en.wikipedia.org/api/rest_v1/page/summary/'+encodeURIComponent(img.dataset.wiki))
    .then(function(r){return r.json()})
    .then(function(d){if(d&&d.thumbnail){img.src=d.thumbnail.source.replace(/\/\d+px-/,'/1000px-')}else{hide(img)}})
    .catch(function(){hide(img)});
 }
+function commonsSearch(img){
+  var q=(img.dataset.q||img.alt||img.dataset.wiki)+' filetype:bitmap';
+  var u='https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrlimit=10&gsrsearch='+encodeURIComponent(q)+'&prop=imageinfo&iiprop=url|mime&iiurlwidth=1000&format=json&origin=*';
+  fetch(u).then(function(r){return r.json()}).then(function(d){
+    var pages=d&&d.query&&d.query.pages?Object.keys(d.query.pages).map(function(k){return d.query.pages[k]}):[];
+    pages.sort(function(a,b){return a.index-b.index});
+    for(var i=0;i<pages.length;i++){
+      var ii=pages[i].imageinfo&&pages[i].imageinfo[0];
+      if(ii&&ii.mime==='image/jpeg'&&ii.thumburl){img.src=ii.thumburl;return}
+    }
+    wikiThumb(img);
+  }).catch(function(){wikiThumb(img)});
+}
+function fix(img){
+  if(img.dataset.tried)return;img.dataset.tried=1;
+  img.removeAttribute('loading');
+  commonsSearch(img);
+}
 document.querySelectorAll('img[data-wiki]').forEach(function(img){
-  img.addEventListener('error',function(){fix(img)});
+  img.addEventListener('error',function(){
+    if(img.dataset.tried){hide(img)}else{fix(img)}
+  });
   if(img.complete&&img.naturalWidth===0)fix(img);
 });
 })();
